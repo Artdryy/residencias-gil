@@ -1,0 +1,844 @@
+backend ->
+.env:
+JWT_SECRET=hashed_token
+
+app.js:
+const path = require('path');
+const express = require('express');
+const app = express();
+const cors = require('cors');
+const db = require('./config/db');
+
+require('dotenv').config();
+
+// Importar Rutas
+const authRoutes = require('./routes/authRoutes');
+const usuariosRoutes = require('./routes/usuariosRoutes');
+const empresasRoutes = require('./routes/empresasRoutes');
+const rolesRoutes = require('./routes/rolesRoutes');
+const reportesRoutes = require('./routes/reportesRoutes');
+const authMiddleware = require('./middlewares/authMiddleware');
+
+// Middlewares generales
+app.use(cors());
+
+// Middlewares solo para APIs normales (usuarios, roles, login, empresas)
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use('/reportes', express.static(path.join(__dirname, 'reportes')));
+
+// Rutas normales (NO suben archivos)
+app.use('/api', authRoutes);
+
+app.use('/api', authMiddleware, usuariosRoutes);
+app.use('/api', authMiddleware, empresasRoutes);
+app.use('/api', authMiddleware, rolesRoutes);
+app.use('/api/reportes', authMiddleware, reportesRoutes);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor escuchando en el puerto ${PORT}`);
+});
+
+app.get('/api/test', (req, res) => {
+  res.send('✅ Backend activo');
+});
+
+hashPassword.js:
+const bcrypt = require('bcryptjs');
+
+async function generarHash() {
+  const plainPassword = 'TestAdmin123';
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(plainPassword, salt);
+  
+  console.log('Contraseña hasheada:', hashedPassword);
+}
+
+generarHash();
+
+package-lock.json:
+
+package.json:
+
+config ->
+
+db.js:
+const mysql = require('mysql2/promise');
+
+const pool = mysql.createPool({
+  host: 'localhost',                
+  user: 'root',                     
+  password: 'GITO.Adry1',          
+  database: 'reposresidencia',     
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
+
+module.exports = pool;
+
+email.js:
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'alu.22130593@correo.itlalaguna.edu.mx', 
+    pass: 'U1tima_GITO.Adry@@2025' 
+  }
+});
+
+module.exports = transporter;
+
+controllers ->
+
+authController:
+const db = require('../config/db'); 
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken'); 
+
+const login = async (req, res) => {
+  try {
+    const { user_name, password } = req.body;
+
+    if (!user_name || !password) {
+      return res.status(400).json({ error: 'Faltan credenciales' });
+    }
+
+    const [rows] = await db.execute(
+      'SELECT usuario_id, user_name, password FROM reposresidencia.usuarios WHERE user_name = ?',
+      [user_name]
+    );
+
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Usuario no encontrado' });
+    }
+
+    const usuario = rows[0];
+
+    const passwordCorrecta = await bcrypt.compare(password, usuario.password);
+
+    if (!passwordCorrecta) {
+      return res.status(401).json({ error: 'Contraseña incorrecta' });
+    }
+
+    const token = jwt.sign(
+      { usuario_id: usuario.usuario_id, user_name: usuario.user_name },
+      process.env.JWT_SECRET,  
+      { expiresIn: '1h' }
+    );    
+    res.json({ token });
+
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+module.exports = { login };
+
+empresasController.js:
+// Archivo: empresasController.js (modificado para usar stored procedures)
+const db = require('../config/db');
+
+const crearEmpresa = async (req, res) => {
+  try {
+    const { nombre, descripcion, direccion, telefono, correo } = req.body;
+
+    if (!nombre) {
+      return res.status(400).json({ error: 'Nombre es obligatorio' });
+    }
+
+    await db.execute(
+      `CALL reposresidencia.insert_empresa(?, ?, ?, ?, ?)`,
+      [nombre, descripcion, direccion, telefono, correo]
+    );
+
+    res.status(201).json({ message: 'Empresa creada correctamente' });
+
+  } catch (error) {
+    console.error('Error al crear empresa:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const listarEmpresas = async (req, res) => {
+  try {
+    const [rows] = await db.execute('CALL reposresidencia.get_empresas()');
+    res.json(rows[0]); // El resultado de un CALL viene anidado
+  } catch (error) {
+    console.error('Error al listar empresas:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const actualizarEmpresa = async (req, res) => {
+  try {
+    const { empresa_id } = req.params;
+    const { nombre, descripcion, direccion, telefono, correo } = req.body;
+
+    await db.execute(
+      `CALL reposresidencia.update_empresa(?, ?, ?, ?, ?, ?)`,
+      [empresa_id, nombre, descripcion, direccion, telefono, correo]
+    );
+
+    res.json({ message: 'Empresa actualizada correctamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar empresa:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const eliminarEmpresa = async (req, res) => {
+  try {
+    const { empresa_id } = req.params;
+
+    await db.execute('CALL reposresidencia.delete_empresa(?)', [empresa_id]);
+
+    res.json({ message: 'Empresa eliminada correctamente' });
+
+  } catch (error) {
+    console.error('Error al eliminar empresa:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+module.exports = {
+  crearEmpresa,
+  listarEmpresas,
+  actualizarEmpresa,
+  eliminarEmpresa
+};
+
+reportesController.js:
+const db = require('../config/db');
+const path = require('path');
+const fs = require('fs');
+
+const crearReporte = async (req, res) => {
+  try {
+    console.log('Multer file info:', req.file);
+    console.log('Body recibido:', req.body);
+
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se subió ningún archivo PDF' });
+    }
+
+    const {
+      nombre_alumno = null,
+      numero_control = null,
+      carrera = null,
+      semestre = null,
+      titulo_reporte = null,
+      empresa_id = null,
+      fecha_entrega = null
+    } = req.body || {};
+
+    if (!nombre_alumno || !numero_control || !empresa_id) {
+      return res.status(400).json({ error: 'Faltan datos obligatorios' });
+    }
+
+    const ruta_pdf = `reportes/${req.file.filename}`;
+
+    await db.execute(
+      `call reposresidencia.insert_reporte(?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        nombre_alumno,
+        numero_control,
+        carrera,
+        semestre,
+        titulo_reporte,
+        empresa_id,
+        ruta_pdf,
+        fecha_entrega
+      ]
+    );
+
+    res.status(201).json({ message: 'Reporte creado correctamente' });
+
+  } catch (error) {
+    console.error('Error al crear reporte:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const listarReportes = async (req, res) => {
+  try {
+    const [rows] = await db.execute(`call reposresidencia.get_reportes()`); 
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error al listar reportes:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+
+const actualizarReporte = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      nombre_alumno,
+      numero_control,
+      carrera,
+      semestre,
+      titulo_reporte,
+      empresa_id
+    } = req.body;
+
+    let nuevoNombrePdf = req.body.ruta_pdf;
+
+    if (req.file) {
+      nuevoNombrePdf = req.file.filename;
+    }
+
+    const query = `
+      UPDATE reposresidencia.reportes
+      SET nombre_alumno = ?, numero_control = ?, carrera = ?, semestre = ?, titulo_reporte = ?, empresa_id = ?, ruta_pdf = ?
+      WHERE proyecto_id = ?
+    `;
+
+    const params = [
+      nombre_alumno,
+      numero_control,
+      carrera,
+      semestre,
+      titulo_reporte,
+      empresa_id,
+      nuevoNombrePdf || null, 
+      id
+    ];
+
+    console.log('🔥 Actualizando reporte con params:', params);
+
+    const [result] = await db.execute(query, params);
+
+    res.json({ message: 'Reporte actualizado correctamente' });
+  } catch (error) {
+    console.error('Error al actualizar reporte:', error);
+    res.status(500).json({ error: 'Error al actualizar el reporte' });
+  }
+};
+
+const eliminarReporte = async (req, res) => {
+  try {
+    const { id } = req.params; // 👈 CAMBIAR de proyecto_id a id
+
+    const [rows] = await db.execute(
+      'SELECT ruta_pdf FROM reposresidencia.reportes WHERE proyecto_id = ?',
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Reporte no encontrado' });
+    }
+
+    const ruta_pdf = rows[0].ruta_pdf;
+    const filePath = path.join(__dirname, '..', ruta_pdf);
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`Archivo eliminado: ${ruta_pdf}`);
+    } else {
+      console.warn(`Archivo no encontrado para borrar: ${ruta_pdf}`);
+    }
+
+    await db.execute(
+      'DELETE FROM reposresidencia.reportes WHERE proyecto_id = ?',
+      [id]
+    );
+
+    res.json({ message: 'Reporte y archivo PDF eliminados correctamente' });
+  } catch (error) {
+    console.error('Error al eliminar reporte:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+  
+const verPdf = (req, res) => {
+  try {
+    const { filename } = req.params;
+    const filePath = path.join(__dirname, '../reportes', filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error al mostrar PDF:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+
+
+module.exports = {
+  crearReporte,
+  listarReportes,
+  actualizarReporte,
+  eliminarReporte,
+  verPdf
+};
+
+rolesController.js:
+const db = require('../config/db');
+
+const crearRol = async (req, res) => {
+  try {
+    const { nombre_rol, descripcion } = req.body;
+
+    if (!nombre_rol) {
+      return res.status(400).json({ error: 'Nombre del rol es obligatorio' });
+    }
+
+    await db.execute(
+      `CALL reposresidencia.insert_role(?, ?)`,
+      [nombre_rol, descripcion]
+    );
+
+    res.status(201).json({ message: 'Rol creado correctamente' });
+
+  } catch (error) {
+    console.error('Error al crear rol:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const listarRoles = async (req, res) => {
+  try {
+    const [rows] = await db.execute('CALL reposresidencia.get_roles()');
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error al listar roles:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const actualizarRol = async (req, res) => {
+  try {
+    const { rol_id } = req.params;
+    const { nombre_rol, descripcion } = req.body;
+
+    await db.execute(
+      `CALL reposresidencia.update_role(?, ?, ?)`,
+      [rol_id, nombre_rol, descripcion]
+    );
+
+    res.json({ message: 'Rol actualizado correctamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar rol:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const eliminarRol = async (req, res) => {
+  try {
+    const { rol_id } = req.params;
+
+    await db.execute('CALL reposresidencia.delete_role(?)', [rol_id]);
+
+    res.json({ message: 'Rol eliminado correctamente' });
+
+  } catch (error) {
+    console.error('Error al eliminar rol:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+module.exports = {
+  crearRol,
+  listarRoles,
+  actualizarRol,
+  eliminarRol
+};
+
+usuariosController.js:
+const db = require('../config/db');
+const bcrypt = require('bcryptjs');
+
+const crearUsuario = async (req, res) => {
+  try {
+    const { user_name, password, email, rol_id } = req.body;
+
+    if (!user_name || !password || !email || !rol_id) {
+      return res.status(400).json({ error: 'Faltan datos' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    await db.execute(
+      `call reposresidencia.insert_usuario(?, ?, ?, ?, ?)`,
+      [user_name, hashedPassword, email, rol_id, 1]
+    );
+
+    res.status(201).json({ message: 'Usuario creado correctamente' });
+
+  } catch (error) {
+    console.error('Error al crear usuario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const listarUsuarios = async (req, res) => {
+  try {
+    const [rows] = await db.execute('CALL reposresidencia.get_usuarios()');
+    res.json(rows[0]); 
+  } catch (error) {
+    console.error('Error al listar usuarios:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+
+const eliminarUsuario = async (req, res) => {
+  try {
+    const { usuario_id } = req.params;
+
+    await db.execute('call reposresidencia.delete_usuario(?)', [usuario_id]);
+
+    res.json({ message: 'Usuario eliminado correctamente' });
+
+  } catch (error) {
+    console.error('Error al eliminar usuario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const actualizarEstadoUsuario = async (req, res) => {
+  try {
+    const { usuario_id } = req.params;
+    const { is_active } = req.body;
+
+    await db.execute('call reposresidencia.update_status_usuario(?, ?)', [usuario_id, is_active]);
+
+    res.json({ message: 'Estado del usuario actualizado correctamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar estado:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const actualizarUsuario = async (req, res) => {
+  try {
+    const { usuario_id } = req.params;
+    const { user_name, email, rol_id } = req.body;
+
+    await db.execute(
+      'UPDATE reposresidencia.usuarios SET user_name = ?, email = ?, rol_id = ? WHERE usuario_id = ?',
+      [user_name, email, rol_id, usuario_id]
+    );
+
+    res.json({ message: 'Usuario actualizado correctamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar usuario:', error);
+    res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
+};
+
+const actualizarPasswordUsuario = async (req, res) => {
+  try {
+    const { usuario_id } = req.params;
+    const { new_password, codigo } = req.body;
+
+    if (!new_password || !codigo) {
+      return res.status(400).json({ error: 'Nueva contraseña y código son obligatorios' });
+    }
+
+    const [rows] = await db.execute(
+      `SELECT codigo_recuperacion FROM reposresidencia.usuarios WHERE usuario_id = ?`,
+      [usuario_id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const codigoAlmacenado = rows[0].codigo_recuperacion;
+
+    if (codigo !== codigoAlmacenado) {
+      return res.status(401).json({ error: 'Código de recuperación incorrecto' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(new_password, salt);
+
+    await db.execute(
+      `UPDATE reposresidencia.usuarios
+       SET password = ?, is_active = true, codigo_recuperacion = NULL
+       WHERE usuario_id = ?`,
+      [hashedPassword, usuario_id]
+    );
+
+    res.json({ message: 'Contraseña actualizada correctamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar contraseña:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+function generarCodigoRecuperacion() {
+  const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let codigo = '';
+  for (let i = 0; i < 6; i++) {
+    codigo += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
+  }
+  return codigo;
+}
+
+const transporter = require('../config/email');
+
+const solicitarCodigoRecuperacion = async (req, res) => {
+  try {
+    const { usuario_id } = req.params;
+    const codigo = generarCodigoRecuperacion();
+    const [rows] = await db.execute(
+      'SELECT email FROM reposresidencia.usuarios WHERE usuario_id = ?',
+      [usuario_id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const emailUsuario = rows[0].email;
+
+    await db.execute(
+      `UPDATE reposresidencia.usuarios SET codigo_recuperacion = ? WHERE usuario_id = ?`,
+      [codigo, usuario_id]
+    );
+
+    const mailOptions = {
+      from: 'tu-email@gmail.com',
+      to: emailUsuario,
+      subject: 'Código de recuperación de contraseña',
+      text: `Tu código de recuperación es: ${codigo}`
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.json({ message: 'Código de recuperación enviado por correo' });
+
+  } catch (error) {
+    console.error('Error al generar código de recuperación:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { usuario_id } = req.params;
+    const { codigo_recuperacion, nuevo_password } = req.body;
+
+    if (!codigo_recuperacion || !nuevo_password) {
+      return res.status(400).json({ error: 'Faltan datos' });
+    }
+
+    const [rows] = await db.execute(
+      'SELECT codigo_recuperacion FROM reposresidencia.usuarios WHERE usuario_id = ?',
+      [usuario_id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const codigoGuardado = rows[0].codigo_recuperacion;
+
+    if (!codigoGuardado || codigo_recuperacion !== codigoGuardado) {
+      return res.status(400).json({ error: 'Código de recuperación inválido' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(nuevo_password, salt);
+
+    await db.execute(
+      `UPDATE reposresidencia.usuarios
+       SET password = ?, is_active = true, codigo_recuperacion = NULL
+       WHERE usuario_id = ?`,
+      [hashedPassword, usuario_id]
+    );
+
+    res.json({ message: 'Contraseña actualizada correctamente' });
+
+  } catch (error) {
+    console.error('Error al resetear contraseña:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+
+module.exports = {
+  crearUsuario,
+  listarUsuarios,
+  eliminarUsuario,
+  actualizarUsuario,
+  actualizarEstadoUsuario,
+  actualizarPasswordUsuario,
+  solicitarCodigoRecuperacion,
+  resetPassword
+};
+
+middlewares ->
+
+authMiddleware.js:
+const jwt = require('jsonwebtoken');
+
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Token no proporcionado' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); 
+    req.usuario = decoded;
+    next();
+  } catch (error) {
+    console.error('Error verificando token:', error);
+    res.status(401).json({ error: 'Token inválido o expirado' });
+  }
+};
+
+module.exports = authMiddleware;
+
+uploadMiddleware.js:
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'reportes');
+    },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const extension = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + extension);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ext === '.pdf') {
+    cb(null, true);
+  } else {
+    cb(new Error('Solo se permiten archivos PDF'));
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 } 
+});
+
+module.exports = upload;
+
+node_modules ->
+
+reportes (esta carpeta almacena los pdfs) ->
+
+routes ->
+
+authRoutes.js:
+const express = require('express');
+const router = express.Router();
+const { login } = require('../controllers/authController');
+
+router.post('/login', login);
+
+const jwt = require('jsonwebtoken');
+router.get('/verify-token', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Token no proporcionado' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    res.json({ valid: true, usuario: decoded });
+  } catch (err) {
+    res.status(401).json({ error: 'Token inválido' });
+  }
+});
+
+module.exports = router;
+
+empresasRoutes.js:
+const express = require('express');
+const router = express.Router();
+const {
+  crearEmpresa,
+  listarEmpresas,
+  actualizarEmpresa,
+  eliminarEmpresa
+} = require('../controllers/empresasController');
+
+router.post('/empresas', crearEmpresa);
+router.get('/empresas', listarEmpresas);
+router.put('/empresas/:empresa_id', actualizarEmpresa);
+router.delete('/empresas/:empresa_id', eliminarEmpresa);
+
+module.exports = router;
+
+reportesRoutes.js:
+const express = require('express');
+const router = express.Router();
+const { listarReportes, crearReporte, actualizarReporte, eliminarReporte } = require('../controllers/reportesController');
+const upload = require('../middlewares/uploadMiddleware');
+
+router.get('/', listarReportes);
+router.post('/', upload.single('pdf'), crearReporte);
+router.put('/:id', upload.single('pdf'), actualizarReporte);
+router.delete('/:id', eliminarReporte);
+
+module.exports = router;
+
+rolesRoutes.js:
+const express = require('express');
+const router = express.Router();
+const {
+  crearRol,
+  listarRoles,
+  actualizarRol,
+  eliminarRol
+} = require('../controllers/rolesController');
+
+router.post('/roles', crearRol);
+router.get('/roles', listarRoles);
+router.put('/roles/:rol_id', actualizarRol);
+router.delete('/roles/:rol_id', eliminarRol);
+
+module.exports = router;
+
+usuariosRoutes.js:
+    const express = require('express');
+    const router = express.Router();
+    const { crearUsuario, listarUsuarios, eliminarUsuario, actualizarUsuario, actualizarEstadoUsuario, actualizarPasswordUsuario, solicitarCodigoRecuperacion, resetPassword } = require('../controllers/usuariosController');
+
+    router.post('/usuarios', crearUsuario);
+    router.get('/usuarios', listarUsuarios);
+    router.delete('/usuarios/:usuario_id', eliminarUsuario);
+    router.put('/usuarios/:usuario_id', actualizarUsuario);
+    router.put('/usuarios/:usuario_id/status', actualizarEstadoUsuario);
+    router.put('/usuarios/:usuario_id/password', actualizarPasswordUsuario);
+    router.post('/usuarios/:usuario_id/solicitar-codigo', solicitarCodigoRecuperacion); 
+    router.post('/usuarios/:usuario_id/reset-password', resetPassword);
+
+    module.exports = router;
+
+utils (vacia) ->
+
+

@@ -1,0 +1,501 @@
+create table reposresidencia.empresas(
+	empresa_id serial,
+	nombre varchar(255) not null unique,
+	descripcion text,
+	direccion varchar(255),
+	telefono varchar(30),
+	correo varchar(255),
+	primary key(empresa_id)
+);
+
+create table reposresidencia.reportes (
+    proyecto_id serial,
+    nombre_alumno varchar(255) not null,
+    numero_control varchar(50) not null unique,
+    carrera varchar(100),
+    semestre varchar(50),
+    titulo_reporte varchar(255),
+    empresa_id bigint unsigned not null,
+    ruta_pdf varchar(500),
+    primary key (proyecto_id),
+    foreign key (empresa_id) references reposresidencia.empresas(empresa_id)
+);
+
+create table reposresidencia.roles(
+	rol_id serial,
+	nombre_rol varchar(100) not null unique,
+	descripcion text,
+	primary key (rol_id)
+);
+
+create table reposresidencia.usuarios(
+	usuario_id serial,
+	user_name varchar(100) not null unique,
+	password varchar(255) not null,
+	email varchar(255) not null,
+	rol_id bigint unsigned not null,
+	is_active boolean default true,
+	codigo_recuperacion varchar(10),
+	primary key (usuario_id),
+	foreign key (rol_id) references reposresidencia.roles(rol_id)
+);
+
+create table reposresidencia.modulos(
+	modulo_id serial,
+	module_name varchar(100) not null unique,
+	primary key (modulo_id)
+);
+
+create table reposresidencia.modulos_rol (
+    rol_id bigint unsigned not null,
+    modulo_id bigint unsigned not null,
+    is_visible boolean default true,
+    primary key (rol_id, modulo_id),
+    foreign key (rol_id) references reposresidencia.roles(rol_id),
+    foreign key (modulo_id) references reposresidencia.modulos(modulo_id)
+);
+
+create table reposresidencia.permisos (
+    permiso_id serial primary key,
+    nombre_permiso varchar(50) not null unique
+);
+
+create table reposresidencia.permisos_rol_modulo (
+    rol_id bigint unsigned not null,
+    modulo_id bigint unsigned not null,
+    permiso_id bigint unsigned not null,
+    is_granted boolean default true,
+    primary key (rol_id, modulo_id, permiso_id),
+    foreign key (rol_id) references reposresidencia.roles(rol_id),
+    foreign key (modulo_id) references reposresidencia.modulos(modulo_id),
+    foreign key (permiso_id) references reposresidencia.permisos(permiso_id)
+);
+
+
+-- STORED PROCEDURES -- 
+-- CRUD REPORTES -- 
+-- INSERTAR REPORTE -- 
+create procedure reposresidencia.insert_reporte(
+    in p_nombre_alumno varchar(255),
+    in p_numero_control varchar(50),
+    in p_carrera varchar(100),
+    in p_semestre varchar(10),
+    in p_titulo_reporte varchar(255),
+    in p_empresa_id bigint unsigned,
+    in p_ruta_pdf varchar(500),
+    in p_fecha_entrega date
+)
+begin
+    insert into reposresidencia.reportes (
+        nombre_alumno,
+        numero_control,
+        carrera,
+        semestre,
+        titulo_reporte,
+        empresa_id,
+        ruta_pdf,
+        fecha_entrega
+    ) values (
+        p_nombre_alumno,
+        p_numero_control,
+        p_carrera,
+        p_semestre,
+        p_titulo_reporte,
+        p_empresa_id,
+        p_ruta_pdf,
+        p_fecha_entrega
+    );
+end;
+-- BORRAR REPORTE -- 
+create procedure reposresidencia.delete_reporte(
+	in p_proyecto_id bigint unsigned 
+)
+begin
+	delete from reposresidencia.reportes
+	where proyecto_id = p_proyecto_id;
+end;
+-- ACTUALIZAR REPORTE -- 
+create procedure reposresidencia.update_reporte(
+    in p_proyecto_id bigint unsigned,
+    in p_nombre_alumno varchar(255),
+    in p_numero_control varchar(50),
+    in p_carrera varchar(100),
+    in p_semestre varchar(10),
+    in p_titulo_reporte varchar(255),
+    in p_empresa_id bigint unsigned,
+    in p_ruta_pdf varchar(500),
+    in p_fecha_entrega date
+)
+begin
+    update reposresidencia.reportes
+    set
+        nombre_alumno = p_nombre_alumno,
+        numero_control = p_numero_control,
+        carrera = p_carrera,
+        semestre = p_semestre,
+        titulo_reporte = p_titulo_reporte,
+        empresa_id = p_empresa_id,
+        ruta_pdf = p_ruta_pdf,
+        fecha_entrega = p_fecha_entrega
+    where proyecto_id = p_proyecto_id;
+end;
+-- LISTADO DE REPORTES --
+create procedure reposresidencia.get_reportes()
+begin
+    select 
+        r.proyecto_id,
+        r.nombre_alumno,
+        r.numero_control,
+        r.carrera,
+        r.titulo_reporte,
+        e.nombre as nombre_empresa,
+        r.ruta_pdf,
+        r.fecha_entrega
+    from 
+        reposresidencia.reportes r
+    inner join 
+        reposresidencia.empresas e on r.empresa_id = e.empresa_id;
+end;
+
+-- CRUD EMPRESAS -- 
+-- INSERTAR EMPRESA --
+create procedure reposresidencia.insert_empresa(
+    in p_nombre varchar(255),
+    in p_descripcion text,
+    in p_direccion varchar(255),
+    in p_telefono varchar(30),
+    in p_correo varchar(255)
+)
+begin
+    insert into reposresidencia.empresas (
+        nombre,
+        descripcion,
+        direccion,
+        telefono,
+        correo
+    ) values (
+        p_nombre,
+        p_descripcion,
+        p_direccion,
+        p_telefono,
+        p_correo
+    );
+end;
+-- ACTUALIZAR EMPRESA -- 
+create procedure reposresidencia.update_empresa(
+    in p_empresa_id bigint unsigned,
+    in p_nombre varchar(255),
+    in p_descripcion text,
+    in p_direccion varchar(255),
+    in p_telefono varchar(30),
+    in p_correo varchar(255)
+)
+begin
+    update reposresidencia.empresas
+    set 
+        nombre = p_nombre,
+        descripcion = p_descripcion,
+        direccion = p_direccion,
+        telefono = p_telefono,
+        correo = p_correo
+    where empresa_id = p_empresa_id;
+end;
+-- BORRAR EMPRESA --
+create procedure reposresidencia.delete_empresa(
+    in p_empresa_id bigint unsigned
+)
+begin
+    delete from reposresidencia.empresas
+    where empresa_id = p_empresa_id;
+end;
+-- LISTADO DE EMPRESAS --
+create procedure reposresidencia.get_empresas()
+begin
+    select 
+        empresa_id,
+        nombre,
+        descripcion,
+        direccion,
+        telefono,
+        correo
+    from reposresidencia.empresas;
+end;
+-- CRUD USUARIOS --
+-- INSERT USUARIO -- 
+create procedure reposresidencia.insert_usuario(
+    in p_user_name varchar(100),
+    in p_password varchar(255),
+    in p_email varchar(255),
+    in p_rol_id bigint unsigned,
+    in p_is_active boolean
+)
+begin
+    insert into reposresidencia.usuarios (
+        user_name,
+        password,
+        email,
+        rol_id,
+        is_active
+    ) values (
+        p_user_name,
+        p_password,
+        p_email,
+        p_rol_id,
+        p_is_active
+    );
+end;
+-- DELETE USUARIO --
+create procedure reposresidencia.delete_usuario(
+    in p_usuario_id bigint unsigned
+)
+begin
+    delete from reposresidencia.usuarios
+    where usuario_id = p_usuario_id;
+end;
+
+-- ACTUALIZAR ESTADO USUARIO --
+create procedure reposresidencia.update_status_usuario(
+    in p_usuario_id bigint unsigned,
+    in p_is_active boolean
+)
+begin
+    update reposresidencia.usuarios
+    set is_active = p_is_active
+    where usuario_id = p_usuario_id;
+end;
+
+-- ACTUALIZAR CONTRASEÑA USUARIO --
+create procedure reposresidencia.update_user_password(
+    in p_usuario_id bigint unsigned,
+    in p_new_password varchar(255)
+)
+begin
+    update reposresidencia.usuarios
+    set 
+        password = p_new_password,
+        is_active = true
+    where usuario_id = p_usuario_id;
+end;
+-- LISTADO DE USUARIOS --
+create procedure reposresidencia.get_usuarios()
+begin
+    select 
+        u.usuario_id,
+        u.user_name,
+        u.email,
+        u.is_active,
+        r.nombre_rol
+    from reposresidencia.usuarios u
+    inner join reposresidencia.roles r on u.rol_id = r.rol_id;
+end;
+
+CREATE PROCEDURE reposresidencia.update_usuario_info(
+    IN p_usuario_id BIGINT UNSIGNED,
+    IN p_user_name VARCHAR(100),
+    IN p_email VARCHAR(255),
+    IN p_rol_id BIGINT UNSIGNED
+)
+BEGIN
+    UPDATE reposresidencia.usuarios
+    SET 
+        user_name = p_user_name,
+        email = p_email,
+        rol_id = p_rol_id
+    WHERE usuario_id = p_usuario_id;
+END;
+
+-- ✅ NUEVA: Asignar nuevo rol a usuario
+CREATE PROCEDURE reposresidencia.asignar_rol_usuario(
+    IN p_usuario_id BIGINT UNSIGNED,
+    IN p_rol_id BIGINT UNSIGNED
+)
+BEGIN
+    UPDATE reposresidencia.usuarios
+    SET rol_id = p_rol_id
+    WHERE usuario_id = p_usuario_id;
+END;
+
+-- ✅ NUEVA: Bloquear usuario (marcar inactivo)
+CREATE PROCEDURE reposresidencia.bloquear_usuario(
+    IN p_usuario_id BIGINT UNSIGNED
+)
+BEGIN
+    UPDATE reposresidencia.usuarios
+    SET is_active = FALSE
+    WHERE usuario_id = p_usuario_id;
+END;
+
+-- ✅ NUEVA: Desbloquear usuario (activar)
+CREATE PROCEDURE reposresidencia.desbloquear_usuario(
+    IN p_usuario_id BIGINT UNSIGNED
+)
+BEGIN
+    UPDATE reposresidencia.usuarios
+    SET is_active = TRUE
+    WHERE usuario_id = p_usuario_id;
+END;
+
+-- ✅ NUEVA: Reiniciar código de recuperación
+CREATE PROCEDURE reposresidencia.reset_codigo_recuperacion(
+    IN p_usuario_id BIGINT UNSIGNED
+)
+BEGIN
+    UPDATE reposresidencia.usuarios
+    SET codigo_recuperacion = NULL
+    WHERE usuario_id = p_usuario_id;
+END;
+
+-- CRUD ROLES --
+-- INSERTAR ROLE --
+create procedure reposresidencia.insert_role(
+    in p_nombre_rol varchar(100),
+    in p_descripcion text
+)
+begin
+    insert into reposresidencia.roles (
+        nombre_rol,
+        descripcion
+    ) values (
+        p_nombre_rol,
+        p_descripcion
+    );
+end;
+-- BORRAR ROLE --
+create procedure reposresidencia.delete_rol(
+    in p_rol_id bigint unsigned
+)
+begin
+    delete from reposresidencia.roles
+    where rol_id = p_rol_id;
+end;
+
+-- ACTUALIZAR ROLE --
+create procedure reposresidencia.update_role(
+    in p_rol_id bigint unsigned,
+    in p_nombre_rol varchar(100),
+    in p_descripcion text
+)
+begin
+    update reposresidencia.roles
+    set 
+        nombre_rol = p_nombre_rol,
+        descripcion = p_descripcion
+    where rol_id = p_rol_id;
+end;
+
+-- VER ROLES --
+create procedure reposresidencia.get_roles()
+begin
+    select 
+        rol_id,
+        nombre_rol,
+        descripcion
+    from reposresidencia.roles;
+end;
+-- CRUD MODULES --
+-- CREAR MODULO
+CREATE PROCEDURE reposresidencia.insert_modulo(
+    IN p_nombre_modulo VARCHAR(100)
+)
+BEGIN
+    INSERT INTO reposresidencia.modulos (module_name)
+    VALUES (p_nombre_modulo);
+END;
+
+-- VER MODULOS
+CREATE PROCEDURE reposresidencia.get_modulos()
+BEGIN
+    SELECT modulo_id, module_name FROM reposresidencia.modulos;
+END;
+
+-- ACTUALIZAR MODULOS
+CREATE PROCEDURE reposresidencia.update_modulo(
+    IN p_modulo_id INT,
+    IN p_nombre_modulo VARCHAR(100)
+)
+BEGIN
+    UPDATE reposresidencia.modulos
+    SET module_name = p_nombre_modulo
+    WHERE modulo_id = p_modulo_id;
+END;
+
+-- ELIMIANR MODULO
+CREATE PROCEDURE reposresidencia.delete_modulo(
+    IN p_modulo_id INT
+)
+BEGIN
+    DELETE FROM reposresidencia.modulos
+    WHERE modulo_id = p_modulo_id;
+END;
+-- CRUD PERMISOS --
+-- CREAR PERMISOS
+CREATE PROCEDURE reposresidencia.insert_permiso(
+    IN p_nombre_permiso VARCHAR(50)
+)
+BEGIN
+    INSERT INTO reposresidencia.permisos (nombre_permiso)
+    VALUES (p_nombre_permiso);
+END;
+
+-- VER PERMISOS
+CREATE PROCEDURE reposresidencia.get_permisos()
+BEGIN
+    SELECT permiso_id, nombre_permiso FROM reposresidencia.permisos;
+END;
+
+-- ELIMINAR PERMISOS
+CREATE PROCEDURE reposresidencia.delete_permiso(
+    IN p_permiso_id INT
+)
+BEGIN
+    DELETE FROM reposresidencia.permisos
+    WHERE permiso_id = p_permiso_id;
+END;
+
+-- CRUD MODULOS_PERMISOS_ROL
+-- ASIGNAR MODULO AL ROL
+CREATE PROCEDURE reposresidencia.asignar_modulo_rol(
+    IN p_rol_id INT,
+    IN p_modulo_id INT,
+    IN p_is_visible BOOLEAN
+)
+BEGIN
+    INSERT INTO reposresidencia.modulos_rol (rol_id, modulo_id, is_visible)
+    VALUES (p_rol_id, p_modulo_id, p_is_visible)
+    ON DUPLICATE KEY UPDATE is_visible = VALUES(is_visible);
+END;
+
+-- OBTENER MODULOS VISIBLES POR ROL
+CREATE PROCEDURE reposresidencia.get_modulos_por_rol(
+    IN p_rol_id INT
+)
+BEGIN
+    SELECT m.modulo_id, m.module_name, mr.is_visible
+    FROM reposresidencia.modulos m
+    LEFT JOIN reposresidencia.modulos_rol mr ON m.modulo_id = mr.modulo_id AND mr.rol_id = p_rol_id;
+END;
+
+-- ASIGNAR PERMISOS AL ROL POR MODULO
+CREATE PROCEDURE reposresidencia.asignar_permiso_rol_modulo(
+    IN p_rol_id INT,
+    IN p_modulo_id INT,
+    IN p_permiso_id INT,
+    IN p_is_granted BOOLEAN
+)
+BEGIN
+    INSERT INTO reposresidencia.permisos_rol_modulo (rol_id, modulo_id, permiso_id, is_granted)
+    VALUES (p_rol_id, p_modulo_id, p_permiso_id, p_is_granted)
+    ON DUPLICATE KEY UPDATE is_granted = VALUES(is_granted);
+END;
+
+-- OBTENER PERMISOS POR ROL Y MODULO
+CREATE PROCEDURE reposresidencia.get_permisos_por_rol_modulo(
+    IN p_rol_id INT,
+    IN p_modulo_id INT
+)
+BEGIN
+    SELECT prm.permiso_id, p.nombre_permiso, prm.is_granted
+    FROM reposresidencia.permisos_rol_modulo prm
+    INNER JOIN reposresidencia.permisos p ON prm.permiso_id = p.permiso_id
+    WHERE prm.rol_id = p_rol_id AND prm.modulo_id = p_modulo_id;
+END;
